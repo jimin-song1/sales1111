@@ -268,35 +268,14 @@ let settingsCache = {};
 let isDark = true;
 let dateMode = 'today';
 
-// ── FETCH (JSONP 우선 → fetch 폴백) ──
-let _cbIdx = 0;
+// ── FETCH ──
 function gasCall(params){
   const qs = Object.entries(params)
     .map(([k,v]) => encodeURIComponent(k)+'='+encodeURIComponent(v))
     .join('&');
-
-  // JSONP 우선 (CORS 완전 우회)
-  return new Promise((resolve, reject) => {
-    const cbName = '_gasCb'+(++_cbIdx);
-    const timeout = setTimeout(()=>{
-      delete window[cbName];
-      // JSONP 타임아웃 시 fetch로 최종 시도
-      fetch(GAS_URL+'?'+qs, {redirect:'follow'})
-        .then(r => r.text())
-        .then(t => resolve(JSON.parse(t)))
-        .catch(()=> reject(new Error('GAS 연결 실패 — 배포 설정을 확인해주세요')));
-    }, 8000);
-    window[cbName] = (data) => { clearTimeout(timeout); delete window[cbName]; resolve(data); };
-    const script = document.createElement('script');
-    script.src = GAS_URL+'?'+qs+'&callback='+cbName;
-    script.onerror = ()=>{
-      clearTimeout(timeout);
-      delete window[cbName];
-      reject(new Error('스크립트 로드 실패 — GAS 배포 설정에서 액세스를 "전체(익명 포함)"로 변경해주세요'));
-    };
-    document.head.appendChild(script);
-    setTimeout(()=>{ try{ document.head.removeChild(script); }catch(e){} }, 15000);
-  });
+  return fetch(GAS_URL+'?'+qs, { redirect: 'follow' })
+    .then(r => r.text())
+    .then(t => JSON.parse(t.replace(/^\uFEFF/,'').trim()));
 }
 
 // ── AUTH ──
