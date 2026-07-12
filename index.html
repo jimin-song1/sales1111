@@ -268,20 +268,28 @@ let settingsCache = {};
 let isDark = true;
 let dateMode = 'today';
 
-// ── JSONP ──
+// ── FETCH (JSONP 대체) ──
 let _cbIdx = 0;
 function gasCall(params){
-  return new Promise((resolve, reject) => {
-    const cbName = '_gasCb'+(++_cbIdx);
-    const timeout = setTimeout(()=>{ delete window[cbName]; reject(new Error('요청 시간 초과 (10초)')); }, 10000);
-    window[cbName] = (data) => { clearTimeout(timeout); delete window[cbName]; resolve(data); };
-    const qs = Object.entries({...params, callback:cbName}).map(([k,v])=>encodeURIComponent(k)+'='+encodeURIComponent(v)).join('&');
-    const script = document.createElement('script');
-    script.src = GAS_URL+'?'+qs;
-    script.onerror = ()=>{ clearTimeout(timeout); delete window[cbName]; reject(new Error('스크립트 로드 실패')); };
-    document.head.appendChild(script);
-    setTimeout(()=>{ try{ document.head.removeChild(script); }catch(e){} }, 15000);
-  });
+  const qs = Object.entries(params)
+    .map(([k,v]) => encodeURIComponent(k)+'='+encodeURIComponent(v))
+    .join('&');
+  return fetch(GAS_URL+'?'+qs, {redirect:'follow'})
+    .then(r => r.json())
+    .catch(()=>{
+      // fetch 실패 시 JSONP 폴백
+      return new Promise((resolve, reject) => {
+        const cbName = '_gasCb'+(++_cbIdx);
+        const timeout = setTimeout(()=>{ delete window[cbName]; reject(new Error('요청 시간 초과 (10초)')); }, 10000);
+        window[cbName] = (data) => { clearTimeout(timeout); delete window[cbName]; resolve(data); };
+        const qsWithCb = qs+'&callback='+cbName;
+        const script = document.createElement('script');
+        script.src = GAS_URL+'?'+qsWithCb;
+        script.onerror = ()=>{ clearTimeout(timeout); delete window[cbName]; reject(new Error('스크립트 로드 실패')); };
+        document.head.appendChild(script);
+        setTimeout(()=>{ try{ document.head.removeChild(script); }catch(e){} }, 15000);
+      });
+    });
 }
 
 // ── AUTH ──
